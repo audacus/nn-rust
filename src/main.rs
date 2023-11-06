@@ -72,10 +72,10 @@ fn model (_app: &App) -> Model {
     }
 
     // Debug entries.
-    for entry in &entries {
-        let predicted_class = classify(entry.spike_length, entry.spot_size);
-        println!("spot size: {} spike length: {} poisenous: {} -> {}", entry.spot_size, entry.spike_length, entry.poisenous, predicted_class);
-    }
+    // for entry in &entries {
+    //     let predicted_class = classify(entry.spike_length, entry.spot_size);
+    //     println!("spot size: {} spike length: {} poisenous: {} -> {}", entry.spot_size, entry.spike_length, entry.poisenous, predicted_class);
+    // }
 
     // Transform entries to grid points.
     let mut grid_points: Vec<GridPoint> = Vec::new();
@@ -163,12 +163,16 @@ fn view(app: &App, model: & Model, frame: Frame) {
 
     let mouse_position = app.mouse.position();
     // Ellipse at mouse.
-    draw.ellipse().wh([5.0; 2].into()).xy(mouse_position);
+    draw.ellipse()
+        .wh([5.0; 2].into())
+        .xy(mouse_position)
+        .z(1.0);
 
     // Mouse position text.
     let pos = format!("[{:.1}, {:.1}]", mouse_position.x, mouse_position.y);
     draw.text(&pos)
         .xy(mouse_position + vec2(0.0, 20.0))
+        .z(1.0)
         .font_size(font_size)
         .color(WHITE);
 
