@@ -36,22 +36,22 @@ fn classify(input_1: f32, input_2: f32) -> u8 {
 }
 
 // Draw stuff.
-struct Model {
-    points: Vec<GridPoint>,
-}
-
-pub struct GridPoint {
+struct GridPoint {
     x: f32,
     y: f32,
     z: f32,
     color: Srgb<u8>,
 }
+struct Model {
+    points: Vec<GridPoint>,
+}
 
 impl GridPoint {
-    pub fn new(x: f32, y: f32, z: f32, color: Srgb<u8>) -> Self {
+    fn new(x: f32, y: f32, z: f32, color: Srgb<u8>) -> Self {
         GridPoint { x, y, z, color }
     }
 }
+
 fn model (_app: &App) -> Model {
     // Create a list with n random entries.
     let mut entries: Vec<Fruit> = Vec::new();
@@ -190,6 +190,7 @@ fn draw_grid(draw: &Draw, win: &Rect, step: f32, weight: f32) {
     let r_iter = step_by().take_while(|&f| f < win.right());
     let l_iter = step_by().map(|f| -f).take_while(|&f| f > win.left());
     let x_iter = r_iter.chain(l_iter);
+
     for x in x_iter {
         draw.line()
             .weight(weight)
@@ -198,6 +199,7 @@ fn draw_grid(draw: &Draw, win: &Rect, step: f32, weight: f32) {
     let t_iter = step_by().take_while(|&f| f < win.top());
     let b_iter = step_by().map(|f| -f).take_while(|&f| f > win.bottom());
     let y_iter = t_iter.chain(b_iter);
+
     for y in y_iter {
         draw.line()
             .weight(weight)
