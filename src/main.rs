@@ -7,13 +7,24 @@ const WEIGHT_1_2: f32 = 0.0;
 // Weights for connections to the second output.
 const WEIGHT_2_1: f32 = 0.0;
 const WEIGHT_2_2: f32 = 0.0;
+// Bias values.
+const BIAS_1: f32 = 0.0;
+const BIAS_2: f32 = 0.0;
 
 // Number of generated entries.
 const ELEMENTS: u8 = 100;
 // padding to apply to minimal and maximal values.
 const VALUE_PADDING: f32 = 0.025;
 // Threshold for changing the color of the points on the grid.
-const COLOR_THRESHOLD: f32 = 0.66;
+const POISENOUS_THRESHOLD: f32 = 0.66;
+
+// Colors
+const COLOR_SAFE: Srgb<u8> = BLUE;
+const COLOR_POISENOUS: Srgb<u8> = RED;
+
+// z indexes
+const Z_BOUNDRY: f32 = 1.0;
+const Z_POINTS: f32 = 10.0;
 
 fn main() {
     nannou::app(model)
@@ -29,8 +40,8 @@ struct Fruit {
 }
 
 fn classify(input_1: f32, input_2: f32) -> u8 {
-    let output_1 = input_1 * WEIGHT_1_1 + input_2 * WEIGHT_2_1;
-    let output_2 = input_1 * WEIGHT_1_2 + input_2 * WEIGHT_2_2;
+    let output_1 = input_1 * WEIGHT_1_1 + input_2 * WEIGHT_2_1 + BIAS_1;
+    let output_2 = input_1 * WEIGHT_1_2 + input_2 * WEIGHT_2_2 + BIAS_2;
 
     if output_1 > output_2 { 0 } else { 1 }
 }
@@ -67,7 +78,7 @@ fn model (_app: &App) -> Model {
         entries.push(Fruit {
             spot_size,
             spike_length,
-            poisenous: (spot_size + spike_length) > COLOR_THRESHOLD,
+            poisenous: (spot_size + spike_length) > POISENOUS_THRESHOLD,
         });
     }
 
@@ -83,8 +94,8 @@ fn model (_app: &App) -> Model {
         grid_points.push(GridPoint::new(
             entry.spot_size,
             entry.spike_length,
-            0.0,
-            if entry.poisenous { RED } else { BLUE },
+            Z_POINTS,
+            if entry.poisenous { COLOR_POISENOUS } else { COLOR_SAFE },
         ));
     }
 
@@ -95,16 +106,18 @@ fn model (_app: &App) -> Model {
 
 fn update(_app: &App, _model: &mut Model, _update: Update) {}
 
-fn view(app: &App, model: & Model, frame: Frame) {
+fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
     let window = app.main_window();
     let win = window.rect();
 
     draw.background().rgb(0.11, 0.12, 0.13);
 
+    /*
     // 100-step and 10-step grids.
     draw_grid(&draw, &win, 100.0, 1.0);
     draw_grid(&draw, &win, 25.0, 0.5);
+     */
 
     // Crosshair.
     let crosshair_color = gray(0.5);
@@ -116,14 +129,12 @@ fn view(app: &App, model: & Model, frame: Frame) {
     ];
 
     for &end in &ends {
-        draw.arrow()
-            .start_cap_round()
-            .head_length(10.0)
-            .head_width(4.0)
+        draw.line()
             .color(crosshair_color)
             .end(end);
     }
 
+    /*
     // Crosshair text.
     let font_size = 14;
     let top = format!("{:.1}", win.top());
@@ -160,8 +171,11 @@ fn view(app: &App, model: & Model, frame: Frame) {
         .right_justify()
         .color(crosshair_color)
         .y(y_off);
+    */
 
+    /*
     let mouse_position = app.mouse.position();
+
     // Ellipse at mouse.
     draw.ellipse()
         .wh([5.0; 2].into())
@@ -169,12 +183,13 @@ fn view(app: &App, model: & Model, frame: Frame) {
         .z(1.0);
 
     // Mouse position text.
-    let pos = format!("[{:.1}, {:.1}]", mouse_position.x, mouse_position.y);
-    draw.text(&pos)
+    let position_text = format!("[{:.1}, {:.1}]", mouse_position.x, mouse_position.y);
+    draw.text(&position_text)
         .xy(mouse_position + vec2(0.0, 20.0))
         .z(1.0)
         .font_size(font_size)
         .color(WHITE);
+     */
 
     // Draw grid points.
     for point in &model.points {
@@ -186,10 +201,38 @@ fn view(app: &App, model: & Model, frame: Frame) {
             .color(point.color);
     }
 
+
+    draw_boundries(&draw, &win, 10, 2.0);
+
     draw.to_frame(app, &frame).unwrap();
 }
 
+fn draw_boundries(draw: &Draw, win: &Rect, step: usize, weight: f32) {
+    let left = win.left() as i32;
+    let right = win.right() as i32;
+    let bottom = win.bottom() as i32;
+    let top = win.top() as i32;
+
+    for x in (left..right).step_by(step) {
+        for y in (bottom..top).step_by(step) {
+            let predicted_class = classify(x as f32 / (left - right) as f32, y as f32 / (bottom - top) as f32);
+
+            let pixel = draw.rect()
+            .xyz(vec3(x as f32, y as f32, Z_BOUNDRY))
+            .wh(vec2(weight, weight));
+
+            if predicted_class == 0 {
+                pixel.color(COLOR_SAFE);
+            } else if predicted_class == 1 {
+                pixel.color(COLOR_POISENOUS);
+            }
+        }
+    }
+
+}
+
 fn draw_grid(draw: &Draw, win: &Rect, step: f32, weight: f32) {
+    // x axis
     let step_by = || (0..).map(|i| i as f32 * step);
     let r_iter = step_by().take_while(|&f| f < win.right());
     let l_iter = step_by().map(|f| -f).take_while(|&f| f > win.left());
@@ -200,6 +243,8 @@ fn draw_grid(draw: &Draw, win: &Rect, step: f32, weight: f32) {
             .weight(weight)
             .points(pt2(x, win.bottom()), pt2(x, win.top()));
     }
+
+    // y axis
     let t_iter = step_by().take_while(|&f| f < win.top());
     let b_iter = step_by().map(|f| -f).take_while(|&f| f > win.bottom());
     let y_iter = t_iter.chain(b_iter);
