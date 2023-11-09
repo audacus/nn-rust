@@ -82,12 +82,6 @@ fn model (_app: &App) -> Model {
         });
     }
 
-    // Debug entries.
-    // for entry in &entries {
-    //     let predicted_class = classify(entry.spike_length, entry.spot_size);
-    //     println!("spot size: {} spike length: {} poisenous: {} -> {}", entry.spot_size, entry.spike_length, entry.poisenous, predicted_class);
-    // }
-
     // Transform entries to grid points.
     let mut grid_points: Vec<GridPoint> = Vec::new();
     for entry in &entries {
@@ -113,12 +107,6 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     draw.background().rgb(0.11, 0.12, 0.13);
 
-    /*
-    // 100-step and 10-step grids.
-    draw_grid(&draw, &win, 100.0, 1.0);
-    draw_grid(&draw, &win, 25.0, 0.5);
-     */
-
     // Crosshair.
     let crosshair_color = gray(0.5);
     let ends = [
@@ -133,63 +121,6 @@ fn view(app: &App, model: &Model, frame: Frame) {
             .color(crosshair_color)
             .end(end);
     }
-
-    /*
-    // Crosshair text.
-    let font_size = 14;
-    let top = format!("{:.1}", win.top());
-    let bottom = format!("{:.1}", win.bottom());
-    let left = format!("{:.1}", win.left());
-    let right = format!("{:.1}", win.right());
-    let x_off = 30.0;
-    let y_off = 20.0;
-    draw.text("0.0")
-        .x_y(15.0, 15.0)
-        .color(crosshair_color)
-        .font_size(font_size);
-    draw.text(&top)
-        .h(win.h())
-        .font_size(font_size)
-        .align_text_top()
-        .color(crosshair_color)
-        .x(x_off);
-    draw.text(&bottom)
-        .h(win.h())
-        .font_size(font_size)
-        .align_text_bottom()
-        .color(crosshair_color)
-        .x(x_off);
-    draw.text(&left)
-        .w(win.w())
-        .font_size(font_size)
-        .left_justify()
-        .color(crosshair_color)
-        .y(y_off);
-    draw.text(&right)
-        .w(win.w())
-        .font_size(font_size)
-        .right_justify()
-        .color(crosshair_color)
-        .y(y_off);
-    */
-
-    /*
-    let mouse_position = app.mouse.position();
-
-    // Ellipse at mouse.
-    draw.ellipse()
-        .wh([5.0; 2].into())
-        .xy(mouse_position)
-        .z(1.0);
-
-    // Mouse position text.
-    let position_text = format!("[{:.1}, {:.1}]", mouse_position.x, mouse_position.y);
-    draw.text(&position_text)
-        .xy(mouse_position + vec2(0.0, 20.0))
-        .z(1.0)
-        .font_size(font_size)
-        .color(WHITE);
-     */
 
     // Draw grid points.
     for point in &model.points {
@@ -229,29 +160,4 @@ fn draw_boundries(draw: &Draw, win: &Rect, step: usize, weight: f32) {
         }
     }
 
-}
-
-fn draw_grid(draw: &Draw, win: &Rect, step: f32, weight: f32) {
-    // x axis
-    let step_by = || (0..).map(|i| i as f32 * step);
-    let r_iter = step_by().take_while(|&f| f < win.right());
-    let l_iter = step_by().map(|f| -f).take_while(|&f| f > win.left());
-    let x_iter = r_iter.chain(l_iter);
-
-    for x in x_iter {
-        draw.line()
-            .weight(weight)
-            .points(pt2(x, win.bottom()), pt2(x, win.top()));
-    }
-
-    // y axis
-    let t_iter = step_by().take_while(|&f| f < win.top());
-    let b_iter = step_by().map(|f| -f).take_while(|&f| f > win.bottom());
-    let y_iter = t_iter.chain(b_iter);
-
-    for y in y_iter {
-        draw.line()
-            .weight(weight)
-            .points(pt2(win.left(), y), pt2(win.right(), y));
-    }
 }
