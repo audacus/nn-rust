@@ -1,6 +1,11 @@
 use snippets;
 use nannou::prelude::*;
 
+use crate::neural_network::NeuralNetwork;
+
+mod layer;
+mod neural_network;
+
 // Number of generated entries.
 const ELEMENTS: u8 = 100;
 // padding to apply to minimal and maximal values.
@@ -16,11 +21,8 @@ const COLOR_POISENOUS: Srgb<u8> = RED;
 const Z_BOUNDRY: f32 = 1.0;
 const Z_POINTS: f32 = 10.0;
 
-// Offsets
-const OFFSET_WEIGHT: f32 = 0.01;
-const OFFSET_BIAS: f32 = 0.001;
-
 fn main() {
+
     nannou::app(model)
         .update(update)
         .view(view)
@@ -42,15 +44,7 @@ struct GridPoint {
 }
 struct Model {
     points: Vec<GridPoint>,
-    // Weights for connections to the first output.
-    weight_1_1: f32,
-    weight_1_2: f32,
-    // Weights for connections to the second output.
-    weight_2_1: f32,
-    weight_2_2: f32,
-    // Bias values.
-    bias_1: f32,
-    bias_2: f32,
+    network: NeuralNetwork,
 }
 
 impl GridPoint {
@@ -96,12 +90,7 @@ fn model (app: &App) -> Model {
 
     Model {
         points: grid_points,
-        weight_1_1: 0.0,
-        weight_1_2: 0.0,
-        weight_2_1: 0.0,
-        weight_2_2: 0.0,
-        bias_1: 0.0,
-        bias_2: 0.0,
+        network: NeuralNetwork::new(vec![2, 3, 2]),
     }
 }
 
@@ -140,13 +129,13 @@ fn view(app: &App, model: &Model, frame: Frame) {
             .color(point.color);
     }
 
-
-    draw_boundries(&draw, &win, model, 10, 2.0);
+    draw_boundries(&draw, &win, model, 15, 4.0);
 
     draw.to_frame(app, &frame).unwrap();
 }
 
 fn draw_boundries(draw: &Draw, win: &Rect, model: &Model, step: usize, weight: f32) {
+
     let left = win.left() as i32;
     let right = win.right() as i32;
     let bottom = win.bottom() as i32;
@@ -154,70 +143,23 @@ fn draw_boundries(draw: &Draw, win: &Rect, model: &Model, step: usize, weight: f
 
     for x in (left..right).step_by(step) {
         for y in (bottom..top).step_by(step) {
-            let predicted_class = classify(model, x as f32 / (left - right) as f32, y as f32 / (bottom - top) as f32);
+
+            let predicted_class = model.network.classify(vec![x as f32 / (left - right) as f32, y as f32 / (bottom - top) as f32]);
 
             let pixel = draw.rect()
-            .xyz(vec3(x as f32, y as f32, Z_BOUNDRY))
-            .wh(vec2(weight, weight));
+                .xyz(vec3(x as f32, y as f32, Z_BOUNDRY))
+                .wh(vec2(weight, weight));
 
-            if predicted_class == 0 {
+
+            if predicted_class == Some(0) {
                 pixel.color(COLOR_SAFE);
-            } else if predicted_class == 1 {
+            } else if predicted_class == Some(1) {
                 pixel.color(COLOR_POISENOUS);
             }
         }
     }
 }
 
-fn classify(model: &Model, input_1: f32, input_2: f32) -> u8 {
-    let output_1 = input_1 * model.weight_1_1 + input_2 * model.weight_1_2 + model.bias_1;
-    let output_2 = input_1 * model.weight_2_1 + input_2 * model.weight_2_2 + model.bias_2;
-
-    if output_1 > output_2 { 0 } else { 1 }
-}
-
-fn key_pressed(_app: &App, model: &mut Model, key: Key) {
-    match key {
-        // Weight 1 1
-        Key::J => model.weight_1_1 -= OFFSET_WEIGHT,
-        Key::K => model.weight_1_1 += OFFSET_WEIGHT,
-        // Weight 1 2
-        Key::H => model.weight_1_2 -= OFFSET_WEIGHT,
-        Key::L => model.weight_1_2 += OFFSET_WEIGHT,
-        // Weight 2 1
-        Key::S => model.weight_2_1 -= OFFSET_WEIGHT,
-        Key::D => model.weight_2_1 += OFFSET_WEIGHT,
-        // Weight 2 2
-        Key::A => model.weight_2_2 -= OFFSET_WEIGHT,
-        Key::F => model.weight_2_2 += OFFSET_WEIGHT,
-        // Bias 1
-        Key::Up => model.bias_1 += OFFSET_BIAS,
-        Key::Down => model.bias_1 -= OFFSET_BIAS,
-        // Bias 2
-        Key::Left => model.bias_2 -= OFFSET_BIAS,
-        Key::Right => model.bias_2 += OFFSET_BIAS,
-        _ => {}
-    };
-
-    model.weight_1_1 = model.weight_1_1.clamp(-1.0, 1.0);
-    model.weight_1_1 = model.weight_1_1.clamp(-1.0, 1.0);
-    model.weight_1_2 = model.weight_1_2.clamp(-1.0, 1.0);
-    model.weight_1_2 = model.weight_1_2.clamp(-1.0, 1.0);
-    model.weight_2_1 = model.weight_2_1.clamp(-1.0, 1.0);
-    model.weight_2_1 = model.weight_2_1.clamp(-1.0, 1.0);
-    model.weight_2_2 = model.weight_2_2.clamp(-1.0, 1.0);
-    model.weight_2_2 = model.weight_2_2.clamp(-1.0, 1.0);
-    model.bias_1 = model.bias_1.clamp(-1.0, 1.0);
-    model.bias_1 = model.bias_1.clamp(-1.0, 1.0);
-    model.bias_2 = model.bias_2.clamp(-1.0, 1.0);
-    model.bias_2 = model.bias_2.clamp(-1.0, 1.0);
-
-    println!("weight 1 1: {:.2}", model.weight_1_1);
-    println!("weight 1 2: {:.2}", model.weight_1_2);
-    println!("weight 2 1: {:.2}", model.weight_2_1);
-    println!("weight 2 2: {:.2}", model.weight_2_2);
-    println!("bias 1: {:.3}", model.bias_1);
-    println!("bias 2: {:.3}", model.bias_2);
-    println!("---");
-
+fn key_pressed(_app: &App, _model: &mut Model, key: Key) {
+    println!("key pressed: {:?}", key);
 }
