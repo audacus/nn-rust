@@ -9,11 +9,11 @@ mod layer;
 mod neural_network;
 
 // Number of generated entries.
-const ELEMENTS: u8 = 100;
+const ELEMENTS: usize = 100;
 // padding to apply to minimal and maximal values.
 const VALUE_PADDING: f32 = 0.025;
 // Threshold for changing the color of the points on the grid.
-const POISENOUS_THRESHOLD: f32 = 0.66;
+const CLASS_THRESHOLD: f32 = 0.66;
 
 // Colors
 const COLOR_SAFE: Srgb<u8> = BLUE;
@@ -29,7 +29,6 @@ const Z_UI: f32 = 4.0;
 const GRAPH_SCALING: f32 = 100.0;
 
 fn main() {
-
     nannou::app(model)
         .update(update)
         .view(view)
@@ -56,36 +55,8 @@ impl GridPoint {
 }
 
 fn model (app: &App) -> Model {
-    // Create a list with n random entries.
-    let mut data: Vec<DataPoint> = Vec::new();
-    for _ in 0..ELEMENTS {
-        let mut spot_size = snippets::random_numbers().next().unwrap() as f32 / std::u64::MAX as f32;
-        let mut spike_length = snippets::random_numbers().next().unwrap() as f32 / std::u64::MAX as f32;
-
-        let min = 0.0 + VALUE_PADDING;
-        let max = 1.0 - VALUE_PADDING;
-        spot_size = min + (spot_size * (max - min));
-        spike_length = min + (spike_length * (max - min));
-
-        let poisenous = (spot_size + spike_length) > POISENOUS_THRESHOLD;
-
-        data.push(DataPoint::new(
-            vec![spot_size, spike_length],
-            if poisenous { 1 } else { 0 },
-            2,
-        ));
-    }
-
-    // Transform entries to grid points.
-    let mut grid_points: Vec<GridPoint> = Vec::new();
-    for entry in &data {
-        grid_points.push(GridPoint::new(
-            entry.inputs[0],
-            entry.inputs[1],
-            Z_POINTS,
-            if entry.label == 1 { COLOR_POISENOUS } else { COLOR_SAFE },
-        ));
-    }
+    let data = get_data_points(ELEMENTS);
+    let grid_points = data_to_grid_points(&data);
 
     app.new_window()
         .key_pressed(key_pressed)
@@ -107,36 +78,14 @@ fn view(app: &App, model: &Model, frame: Frame) {
     let window = app.main_window();
     let win = window.rect();
 
+    // Prepare window.
     draw.background().rgb(0.11, 0.12, 0.13);
+    draw_crosshair(&draw, &win);
 
-    // Crosshair.
-    let crosshair_color = gray(0.5);
-    let ends = [
-        win.mid_top(),
-        win.mid_right(),
-        win.mid_bottom(),
-        win.mid_left(),
-    ];
-
-    for &end in &ends {
-        draw.line()
-            .color(crosshair_color)
-            .end(end);
-    }
-
-    // Draw grid points.
-    for point in &model.points {
-        draw.ellipse()
-            .wh(vec2(10.0, 10.0))
-            .x(point.x * win.right())
-            .y(point.y * win.top())
-            .z(point.z)
-            .color(point.color);
-    }
-
+    // Draw data stuff.
+    draw_data_points(&draw, &win, model);
     draw_boundries(&draw, &win, model, 15, 2.0);
-
-    show_cost(&draw, &win, model);
+    draw_cost(&draw, &win, model);
 
     // Draw graph stuff.
     draw_function_graph(&draw, &win, graph_function);
@@ -145,7 +94,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
     draw.to_frame(app, &frame).unwrap();
 }
 
-fn show_cost(draw: &Draw, win: &Rect, model: &Model) {
+fn draw_cost(draw: &Draw, win: &Rect, model: &Model) {
     let cost = model.network.cost(&model.data);
     let cost_text = format!("cost: {:.4}", cost);
 
@@ -221,6 +170,35 @@ fn draw_function_graph(draw: &Draw, win: &Rect, graph_function: fn(f32) -> f32) 
         .color(STEELBLUE);
 }
 
+fn draw_data_points(draw: &Draw, win: &Rect, model: &Model) {
+    // Draw grid points.
+    for point in &model.points {
+        draw.ellipse()
+            .wh(vec2(10.0, 10.0))
+            .x(point.x * win.right())
+            .y(point.y * win.top())
+            .z(point.z)
+            .color(point.color);
+    }
+}
+
+fn draw_crosshair(draw: &Draw, win: &Rect) {
+    // Crosshair.
+    let crosshair_color = gray(0.5);
+    let ends = [
+        win.mid_top(),
+        win.mid_right(),
+        win.mid_bottom(),
+        win.mid_left(),
+    ];
+
+    for &end in &ends {
+        draw.line()
+            .color(crosshair_color)
+            .end(end);
+    }
+}
+
 fn draw_boundries(draw: &Draw, win: &Rect, model: &Model, step: usize, weight: f32) {
 
     let left = win.left() as i32;
@@ -250,4 +228,46 @@ fn draw_boundries(draw: &Draw, win: &Rect, model: &Model, step: usize, weight: f
 
 fn key_pressed(_app: &App, _model: &mut Model, key: Key) {
     println!("key pressed: {:?}", key);
+}
+
+fn data_to_grid_points(data: &Vec<DataPoint>) -> Vec<GridPoint> {
+    let mut grid_points: Vec<GridPoint> = Vec::with_capacity(data.len());
+
+    for data_point in data {
+        grid_points.push(GridPoint::new(
+            data_point.inputs[0],
+            data_point.inputs[1],
+            Z_POINTS,
+            if data_point.label == 1 { COLOR_POISENOUS } else { COLOR_SAFE },
+        ));
+    }
+
+    grid_points
+}
+
+fn get_data_points(elements: usize) -> Vec<DataPoint> {
+    let mut data: Vec<DataPoint> = Vec::new();
+
+    for _ in 0..elements {
+        // Get random float values between 0 and 1 for x and y.
+        let x = snippets::random_numbers().next().unwrap() as f32 / u64::MAX as f32;
+        let y = snippets::random_numbers().next().unwrap() as f32 / u64::MAX as f32;
+
+        // Apply padding to the axis values.
+        let min = 0.0 + VALUE_PADDING;
+        let max = 1.0 - VALUE_PADDING;
+        let spot_size = min + (x * (max - min));
+        let spike_length = min + (y * (max - min));
+
+        // Set poisenous flag based on the class threshold.
+        let poisenous = (spot_size + spike_length) > CLASS_THRESHOLD;
+
+        data.push(DataPoint::new(
+            vec![spot_size, spike_length],
+            if poisenous { 1 } else { 0 },
+            2,
+        ));
+    }
+
+    data
 }
