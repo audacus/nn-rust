@@ -15,17 +15,21 @@ impl Layer {
     // Create the layer.
     pub fn new(num_nodes_in: usize, num_nodes_out: usize) -> Self {
         let mut weights: Vec<Vec<f32>> = Vec::with_capacity(num_nodes_in);
+        let min_weight = -WEIGHT_BOUNDRY;
+        let max_weight = WEIGHT_BOUNDRY;
         for _ in 0..num_nodes_in {
             let mut current_weights: Vec<f32> = vec![];
             for _ in 0..num_nodes_out {
-                current_weights.push(-WEIGHT_BOUNDRY + snippets::random_numbers().next().unwrap() as f32 / std::u64::MAX as f32 * (2.0 * WEIGHT_BOUNDRY));
+                current_weights.push(min_weight + snippets::random_numbers().next().unwrap() as f32 / std::u64::MAX as f32 * (max_weight - min_weight));
             }
             weights.push(current_weights);
         }
 
         let mut biases: Vec<f32> = Vec::with_capacity(num_nodes_out);
+        let min_bias = -BIAS_BOUNDRY;
+        let max_bias = BIAS_BOUNDRY;
         for _ in 0..num_nodes_out {
-            biases.push(-BIAS_BOUNDRY + snippets::random_numbers().next().unwrap() as f32 / std::u64::MAX as f32 * (2.0 * BIAS_BOUNDRY));
+            biases.push(min_bias + snippets::random_numbers().next().unwrap() as f32 / std::u64::MAX as f32 * (max_bias - min_bias));
         }
 
         Layer {
@@ -54,6 +58,12 @@ impl Layer {
 
     pub fn activation_function(&self, weighted_input: f32) -> f32 {
         self.sigmoid(weighted_input)
+    }
+
+    pub fn node_cost(&self, output_activation: f32, expected_output: f32) -> f32 {
+        let error = output_activation - expected_output;
+
+        error * error
     }
 
     // Step
