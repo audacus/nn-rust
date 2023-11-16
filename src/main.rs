@@ -1,12 +1,14 @@
 use snippets;
 use nannou::prelude::*;
 
-use crate::data_point::DataPoint;
-use crate::neural_network::NeuralNetwork;
-
 mod data_point;
+mod gradient_descent;
 mod layer;
 mod neural_network;
+
+use crate::data_point::DataPoint;
+use crate::gradient_descent::GradientDescent;
+use crate::neural_network::NeuralNetwork;
 
 // Number of generated entries.
 const ELEMENTS: usize = 100;
@@ -17,7 +19,7 @@ const CLASS_THRESHOLD: f32 = 0.66;
 
 // Colors
 const COLOR_SAFE: Srgb<u8> = BLUE;
-const COLOR_POISENOUS: Srgb<u8> = RED;
+const COLOR_UNSAFE: Srgb<u8> = RED;
 
 // z indexes
 const Z_BOUNDRY: f32 = 1.0;
@@ -46,6 +48,7 @@ struct Model {
     points: Vec<GridPoint>,
     data: Vec<DataPoint>,
     network: NeuralNetwork,
+    gradient_descent: GradientDescent,
 }
 
 impl GridPoint {
@@ -67,6 +70,7 @@ fn model (app: &App) -> Model {
         points: grid_points,
         data,
         network: NeuralNetwork::new(vec![2, 3, 2]),
+        gradient_descent: GradientDescent::new(0.0),
     }
 }
 
@@ -88,8 +92,8 @@ fn view(app: &App, model: &Model, frame: Frame) {
     draw_cost(&draw, &win, model);
 
     // Draw graph stuff.
-    draw_function_graph(&draw, &win, graph_function);
-    draw_slope(&app, &draw, graph_function);
+    draw_function_graph(&draw, &win, GradientDescent::function);
+    draw_slope(&draw, model, GradientDescent::function);
 
     draw.to_frame(app, &frame).unwrap();
 }
@@ -108,48 +112,50 @@ fn draw_cost(draw: &Draw, win: &Rect, model: &Model) {
         .color(WHITE);
 }
 
-fn graph_function(x: f32) -> f32 {
-    0.2 * pow(x, 4) + 0.1 * pow(x, 3) - pow(x, 2) + 2.0
-}
-
-fn  draw_slope(app: &App, draw: &Draw, graph_function: fn(f32) -> f32) {
-    // Get x from mouse position.
-    let mouse = app.mouse.position();
-    let x = mouse.x / GRAPH_SCALING;
+fn  draw_slope(draw: &Draw, model: &Model, graph_function: fn(f32) -> f32) {
+    let x = model.gradient_descent.input_value;
     let y = graph_function(x);
 
     // Aproximate the slope of the function at x.
     let h = 0.00001;
-    let delta_output = graph_function(x + h) - y;
+    let delta_output = graph_function(x + h) - graph_function(x);
     let slope = delta_output / h;
+
+    // Draw x.
+    let weight_x = 2.0;
+    draw.ellipse()
+        .x(x * GRAPH_SCALING)
+        .z(Z_UI)
+        .color(WHITE)
+        .wh(vec2(weight_x, weight_x));
+
+    // Draw point.
+    let point = Vec2::new(x * GRAPH_SCALING, y * GRAPH_SCALING);
+    let weight_point = 8.0;
+    draw.ellipse()
+        .xy(point)
+        .z(Z_UI)
+        .color(WHITE)
+        .wh(vec2(weight_point, weight_point));
+
+    // Draw point text.
+    let slope_text = format!("{:.2}", slope);
+    draw.text(&slope_text)
+        .xy(point + vec2(0.0, 20.0))
+        .z(Z_UI)
+        .color(WHITE);
 
     // Visualize the slope.
     let slope_direction = Vec2::new(1.0, slope).normalize();
-    let point = Vec2::new(x, y);
 
     // Draw slope.
     let weight_slope = 2.0;
     draw.line()
-        .start((point - slope_direction) * GRAPH_SCALING)
-        .end((point + slope_direction) * GRAPH_SCALING)
+        .start(point - (slope_direction * GRAPH_SCALING))
+        .end(point + (slope_direction * GRAPH_SCALING))
         .z(Z_GRAPH)
         .color(RED)
         .weight(weight_slope);
-
-    // Draw x.
-    let weight = 8.0;
-    draw.ellipse()
-        .xy(point * GRAPH_SCALING)
-        .z(Z_UI)
-        .color(WHITE)
-        .wh(vec2(weight, weight));
-
-    // Draw x text.
-    let slope_text = format!("{:.2}", slope);
-    draw.text(&slope_text)
-        .xy(point * GRAPH_SCALING + vec2(0.0, 20.0))
-        .z(Z_UI)
-        .color(WHITE);
 }
 
 fn draw_function_graph(draw: &Draw, win: &Rect, graph_function: fn(f32) -> f32) {
@@ -216,18 +222,13 @@ fn draw_boundries(draw: &Draw, win: &Rect, model: &Model, step: usize, weight: f
                 .xyz(vec3(x as f32, y as f32, Z_BOUNDRY))
                 .wh(vec2(weight, weight));
 
-
             if predicted_class == Some(0) {
                 pixel.color(COLOR_SAFE);
             } else if predicted_class == Some(1) {
-                pixel.color(COLOR_POISENOUS);
+                pixel.color(COLOR_UNSAFE);
             }
         }
     }
-}
-
-fn key_pressed(_app: &App, _model: &mut Model, key: Key) {
-    println!("key pressed: {:?}", key);
 }
 
 fn data_to_grid_points(data: &Vec<DataPoint>) -> Vec<GridPoint> {
@@ -238,7 +239,7 @@ fn data_to_grid_points(data: &Vec<DataPoint>) -> Vec<GridPoint> {
             data_point.inputs[0],
             data_point.inputs[1],
             Z_POINTS,
-            if data_point.label == 1 { COLOR_POISENOUS } else { COLOR_SAFE },
+            if data_point.label == 1 { COLOR_UNSAFE } else { COLOR_SAFE },
         ));
     }
 
@@ -270,4 +271,25 @@ fn get_data_points(elements: usize) -> Vec<DataPoint> {
     }
 
     data
+}
+
+fn key_pressed(_app: &App, model: &mut Model, key: Key) {
+    // println!("key pressed: {:?}", key);
+    let random = snippets::random_numbers().next().unwrap() as f32 / u64::MAX as f32;
+
+    // Get an x value that is max x% to the left / right from the center.
+    let x_padding: f32 = 0.5;
+    let x = -x_padding + (random * (2.0 * x_padding));
+
+    match key {
+        Key::L => model.gradient_descent.learn(),
+        Key::Up => model.gradient_descent.learn_rate += 0.01,
+        Key::Down => model.gradient_descent.learn_rate -= 0.01,
+        Key::R => model.gradient_descent.input_value = x,
+        _ => (),
+    }
+
+    model.gradient_descent.learn_rate = model.gradient_descent.learn_rate.clamp(0.0, 1.0);
+
+    println!("learn rate: {:.2}", model.gradient_descent.learn_rate);
 }

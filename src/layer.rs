@@ -57,7 +57,7 @@ impl Layer {
     }
 
     pub fn activation_function(&self, weighted_input: f32) -> f32 {
-        self.sigmoid(weighted_input)
+        self._sigmoid(weighted_input)
     }
 
     pub fn node_cost(&self, output_activation: f32, expected_output: f32) -> f32 {
@@ -67,28 +67,28 @@ impl Layer {
     }
 
     // Step
-    fn step(&self, weighted_input: f32) -> f32 {
+    fn _step(&self, weighted_input: f32) -> f32 {
         if weighted_input > 0.0 { 1.0 } else { 0.0 }
     }
 
     // Sigmoid
-    fn sigmoid(&self, weighted_input: f32) -> f32 {
+    fn _sigmoid(&self, weighted_input: f32) -> f32 {
         1.0 / (1.0 + -weighted_input.exp())
     }
 
     // Hyperbolic tangent
-    fn hyperbolic_tangent(&self, weighted_input: f32) -> f32 {
+    fn _hyperbolic_tangent(&self, weighted_input: f32) -> f32 {
         let e2w = (2.0 * weighted_input).exp();
         (e2w - 1.0) / (e2w + 1.0)
     }
 
     // SiLU
-    fn silu(&self, weighted_input: f32) -> f32 {
+    fn _silu(&self, weighted_input: f32) -> f32 {
         weighted_input / (1.0 + -weighted_input.exp())
     }
 
     // ReLU
-    fn relu(&self, weighted_input: f32) -> f32 {
+    fn _relu(&self, weighted_input: f32) -> f32 {
         weighted_input.max(0.0)
     }
 }
