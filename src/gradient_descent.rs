@@ -1,19 +1,20 @@
 pub struct GradientDescent {
     pub input_value: f32,
     pub learn_rate: f32,
-    // Approximate the slope of the function using the finite difference method.
     pub h: f32,
+    pub past_values: Vec<f32>,
 }
 
 impl GradientDescent {
-    pub const LEARN_RATE_STEP: f32 = 0.25;
+    pub const LEARN_RATE_STEP: f32 = 0.05;
     pub const H_FACTOR: f32 = 10.0;
 
     pub fn new(random_value: f32) -> Self {
         GradientDescent {
             input_value: random_value,
-            learn_rate: 2.25,
-            h: 0.0001
+            learn_rate: 2.3,
+            h: 0.0001,
+            past_values: vec![],
         }
     }
 
@@ -24,6 +25,8 @@ impl GradientDescent {
     // Run one iteration of the grdient descent algorithm.
     pub fn learn (&mut self) {
         println!("gradient descent learn!");
+
+        self.past_values.push(self.input_value);
 
         let delta_output = Self::function(self.input_value + self.h) - Self::function(self.input_value);
         let slope = delta_output / self.h;

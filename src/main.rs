@@ -94,6 +94,17 @@ fn new_network(model: &mut Model) {
     model.network = NeuralNetwork::new(LAYER_CONFIGURATION.to_vec());
 }
 
+fn new_graph(model: &mut Model) {
+    let random = snippets::random_numbers().next().unwrap() as f32 / u64::MAX as f32;
+
+    // Get an x value that is max x% to the left / right from the center.
+    let x_padding: f32 = 2.5;
+    let x: f32 = -x_padding + (random * (2.0 * x_padding));
+
+    model.gradient_descent.past_values = vec![];
+    model.gradient_descent.input_value = x;
+}
+
 fn update(_app: &App, model: &mut Model, _update: Update) {
     if model.learn {
 
@@ -121,8 +132,8 @@ fn view(app: &App, model: &Model, frame: Frame) {
     draw_info(&draw, &win, model);
 
     // Draw graph stuff.
-    //draw_function_graph(&draw, &win, GradientDescent::function);
-    //draw_slope(&draw, model, GradientDescent::function);
+    draw_function_graph(&draw, &win, GradientDescent::function);
+    draw_slope(&draw, model, GradientDescent::function);
 
     draw.to_frame(app, &frame).unwrap();
 }
@@ -138,6 +149,7 @@ fn draw_info(draw: &Draw, win: &Rect, model: &Model) {
         }
     }
 
+    println!();
     let info_text = format!(
 "cost: {:.10}
 learn rate: {:.5}
@@ -158,6 +170,7 @@ correct: {}/{}",
 }
 
 fn  draw_slope(draw: &Draw, model: &Model, graph_function: fn(f32) -> f32) {
+    let past_values = &model.gradient_descent.past_values;
     let x = model.gradient_descent.input_value;
     let y = graph_function(x);
 
@@ -166,17 +179,27 @@ fn  draw_slope(draw: &Draw, model: &Model, graph_function: fn(f32) -> f32) {
     let delta_output = graph_function(x + h) - graph_function(x);
     let slope = delta_output / h;
 
-    // Draw x.
     let weight_x = 2.0;
+
+    // Draw x.
     draw.ellipse()
         .x(x * GRAPH_SCALING)
         .z(Z_UI)
         .color(WHITE)
         .wh(vec2(weight_x, weight_x));
 
+    let weight_point = 8.0;
+    // Draw past values.
+    for past_x in past_values {
+        let point = Vec2::new(past_x * GRAPH_SCALING, graph_function(*past_x) * GRAPH_SCALING);
+        draw.ellipse()
+            .xy(point)
+            .z(Z_GRAPH)
+            .color(DARKGRAY)
+            .wh(vec2(weight_point, weight_point));
+    }
     // Draw point.
     let point = Vec2::new(x * GRAPH_SCALING, y * GRAPH_SCALING);
-    let weight_point = 8.0;
     draw.ellipse()
         .xy(point)
         .z(Z_UI)
@@ -252,9 +275,9 @@ fn draw_crosshair(draw: &Draw, win: &Rect) {
 
 fn draw_boundries(draw: &Draw, win: &Rect, model: &Model, step: usize, weight: f32) {
 
-    let left = win.left() as i32;
+    //let left = win.left() as i32;
     let right = win.right() as i32;
-    let bottom = win.bottom() as i32;
+    //let bottom = win.bottom() as i32;
     let top = win.top() as i32;
 
     for x in (0..right).step_by(step) {
@@ -320,11 +343,6 @@ fn get_data_points(elements: usize) -> Vec<DataPoint> {
 
 fn key_pressed(_app: &App, model: &mut Model, key: Key) {
     // println!("key pressed: {:?}", key);
-    let random = snippets::random_numbers().next().unwrap() as f32 / u64::MAX as f32;
-
-    // Get an x value that is max x% to the left / right from the center.
-    let x_padding: f32 = 0.5;
-    let x: f32 = -x_padding + (random * (2.0 * x_padding));
 
     match key {
         Key::N => new_run(model),
@@ -336,7 +354,7 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
         Key::Right => model.gradient_descent.h /= GradientDescent::H_FACTOR,
         Key::Left => model.gradient_descent.h *= GradientDescent::H_FACTOR,
         // Graph.
-        Key::R => model.gradient_descent.input_value = x,
+        Key::R => new_graph(model),
         Key::L => model.gradient_descent.learn(),
         _ => (),
     }
