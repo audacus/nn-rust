@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct DataPoint {
     pub inputs: Vec<f32>,
     pub expected_outputs: Vec<f32>,
@@ -8,8 +9,8 @@ impl DataPoint {
     pub fn new(inputs: Vec<f32>, label: usize, num_labels: usize) -> Self {
         DataPoint {
             inputs,
-            label,
             expected_outputs: Self::create_one_hot(label, num_labels),
+            label,
         }
     }
 

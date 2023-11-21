@@ -2,10 +2,11 @@ use crate::layer::Layer;
 use crate::data_point::DataPoint;
 
 pub struct NeuralNetwork {
-    layers: Vec<Layer>,
+    pub layers: Vec<Layer>,
 }
 
 impl NeuralNetwork {
+
 
     // Create new neural network.
     pub fn new(layer_sizes: Vec<usize>) -> Self {
@@ -18,6 +19,43 @@ impl NeuralNetwork {
         }
 
         NeuralNetwork { layers }
+    }
+
+    pub fn learn(&mut self, training_data: &Vec<DataPoint>, learn_rate: f32, h: f32) {
+        let original_cost = self.cost(training_data);
+
+        // Clone layers to use for iterating with a unmutable reference.
+        let layers = self.layers.clone();
+
+        for layer_index in 0..layers.len() {
+            let layer = &layers[layer_index];
+
+            // Calculate the cost gradient for the current weights.
+            for node_in in 0..layer.num_nodes_in {
+                for node_out in 0..layer.num_nodes_out {
+                    self.layers[layer_index].weights[node_in][node_out] += h;
+                    let delta_cost = self.cost(training_data) - original_cost;
+                    self.layers[layer_index].weights[node_in][node_out] -= h;
+                    self.layers[layer_index].cost_gradient_weights[node_in][node_out] = delta_cost / h;
+                }
+            }
+
+            // Calculate the cost gradient for the current biases.
+            for node_out in 0..layer.num_nodes_out {
+                self.layers[layer_index].biases[node_out] += h;
+                let delta_cost = self.cost(training_data) - original_cost;
+                self.layers[layer_index].biases[node_out] -= h;
+                self.layers[layer_index].cost_gradient_biases[node_out] = delta_cost / h;
+            }
+        }
+
+        self.apply_all_gradients(learn_rate);
+    }
+
+    fn apply_all_gradients(&mut self, learn_rate: f32) {
+        for layer in &mut self.layers {
+            layer.apply_gradients(learn_rate);
+        }
     }
 
     // Run the input values through the network to calculate the output values.
@@ -55,11 +93,13 @@ impl NeuralNetwork {
 
     fn cost_single(&self, data_point: &DataPoint) -> f32 {
         let outputs = self.calculate_outputs(&data_point.inputs);
-        let output_layer = &self.layers[self.layers.len() - 1];
+        let output_layer = &self.layers.last().unwrap();
         let mut cost: f32 = 0.0;
 
         for node_out in 0..outputs.len() {
-            cost += output_layer.node_cost(outputs[node_out], data_point.expected_outputs[node_out]);
+            let current_node_cost = output_layer.node_cost(outputs[node_out], data_point.expected_outputs[node_out]);
+            cost += current_node_cost;
+
         }
 
         cost

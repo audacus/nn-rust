@@ -11,11 +11,13 @@ use crate::gradient_descent::GradientDescent;
 use crate::neural_network::NeuralNetwork;
 
 // Number of generated entries.
-const ELEMENTS: usize = 100;
+const ELEMENTS: usize = 65;
 // padding to apply to minimal and maximal values.
 const VALUE_PADDING: f32 = 0.025;
 // Threshold for changing the color of the points on the grid.
-const CLASS_THRESHOLD: f32 = 0.66;
+const CLASS_THRESHOLD: f32 = 0.3;
+// Layer configuration.
+const LAYER_CONFIGURATION: [usize; 3] = [2, 3, 2];
 
 // Colors
 const COLOR_SAFE: Srgb<u8> = BLUE;
@@ -28,7 +30,7 @@ const Z_GRAPH: f32 = 3.0;
 const Z_UI: f32 = 4.0;
 
 // 100 pixel correspond to value 1.0
-const GRAPH_SCALING: f32 = 100.0;
+ const GRAPH_SCALING: f32 = 100.0;
 
 fn main() {
     nannou::app(model)
@@ -49,6 +51,7 @@ struct Model {
     data: Vec<DataPoint>,
     network: NeuralNetwork,
     gradient_descent: GradientDescent,
+    learn: bool,
 }
 
 impl GridPoint {
@@ -57,24 +60,50 @@ impl GridPoint {
     }
 }
 
-fn model (app: &App) -> Model {
-    let data = get_data_points(ELEMENTS);
-    let grid_points = data_to_grid_points(&data);
-
+fn model(app: &App) -> Model {
     app.new_window()
         .key_pressed(key_pressed)
         .build()
         .unwrap();
 
+    let data = get_data_points(ELEMENTS);
+    let grid_points = data_to_grid_points(&data);
+
     Model {
         points: grid_points,
         data,
-        network: NeuralNetwork::new(vec![2, 3, 2]),
+        network: NeuralNetwork::new(LAYER_CONFIGURATION.to_vec()),
         gradient_descent: GradientDescent::new(0.0),
+        learn: false,
     }
 }
 
-fn update(_app: &App, _model: &mut Model, _update: Update) {
+fn new_run(model: &mut Model) {
+    model.learn = false;
+
+    let data = get_data_points(ELEMENTS);
+    let grid_points = data_to_grid_points(&data);
+
+    model.data = data;
+    model.points = grid_points;
+}
+
+fn new_network(model: &mut Model) {
+    model.learn = false;
+
+    model.network = NeuralNetwork::new(LAYER_CONFIGURATION.to_vec());
+}
+
+fn update(_app: &App, model: &mut Model, _update: Update) {
+    if model.learn {
+
+        // Create different chunk sizes from 1 to all.
+        for chunk_size in 1..model.data.len() {
+            for chunk in model.data.chunks(chunk_size) {
+                model.network.learn(&chunk.to_vec(), model.gradient_descent.learn_rate, model.gradient_descent.h);
+            }
+        }
+    }
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
@@ -88,22 +117,38 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     // Draw data stuff.
     draw_data_points(&draw, &win, model);
-    draw_boundries(&draw, &win, model, 15, 2.0);
-    draw_cost(&draw, &win, model);
+    draw_boundries(&draw, &win, model, 10, 2.0);
+    draw_info(&draw, &win, model);
 
     // Draw graph stuff.
-    draw_function_graph(&draw, &win, GradientDescent::function);
-    draw_slope(&draw, model, GradientDescent::function);
+    //draw_function_graph(&draw, &win, GradientDescent::function);
+    //draw_slope(&draw, model, GradientDescent::function);
 
     draw.to_frame(app, &frame).unwrap();
 }
 
-fn draw_cost(draw: &Draw, win: &Rect, model: &Model) {
+fn draw_info(draw: &Draw, win: &Rect, model: &Model) {
     let cost = model.network.cost(&model.data);
-    let cost_text = format!("cost: {:.4}", cost);
+
+    let mut correct_counter = 0;
+    for data_point in &model.data {
+        let predicted_class = model.network.classify(&data_point.inputs);
+        if Some(data_point.label) == predicted_class {
+            correct_counter += 1;
+        }
+    }
+
+    let info_text = format!(
+"cost: {:.10}
+learn rate: {:.5}
+h: {:.10}
+correct: {}/{}",
+    cost, model.gradient_descent.learn_rate, model.gradient_descent.h, correct_counter, model.data.len());
+
+    println!("{}", info_text);
 
     let pad = 6.0;
-    draw.text(&cost_text)
+    draw.text(&info_text)
         .h(win.pad(pad).h())
         .w(win.pad(pad).w())
         .z(Z_UI)
@@ -212,8 +257,8 @@ fn draw_boundries(draw: &Draw, win: &Rect, model: &Model, step: usize, weight: f
     let bottom = win.bottom() as i32;
     let top = win.top() as i32;
 
-    for x in (left..right).step_by(step) {
-        for y in (bottom..top).step_by(step) {
+    for x in (0..right).step_by(step) {
+        for y in (0..top).step_by(step) {
 
             let inputs = vec![x as f32 / right as f32, y as f32 / top as f32];
             let predicted_class = model.network.classify(&inputs);
@@ -261,7 +306,7 @@ fn get_data_points(elements: usize) -> Vec<DataPoint> {
         let spike_length = min + (y * (max - min));
 
         // Set poisenous flag based on the class threshold.
-        let poisenous = (spot_size + spike_length) > CLASS_THRESHOLD;
+        let poisenous = spot_size.pow(0.8) * spike_length.pow(0.8) > CLASS_THRESHOLD;
 
         data.push(DataPoint::new(
             vec![spot_size, spike_length],
@@ -279,17 +324,26 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
 
     // Get an x value that is max x% to the left / right from the center.
     let x_padding: f32 = 0.5;
-    let x = -x_padding + (random * (2.0 * x_padding));
+    let x: f32 = -x_padding + (random * (2.0 * x_padding));
 
     match key {
-        Key::L => model.gradient_descent.learn(),
-        Key::Up => model.gradient_descent.learn_rate += 0.01,
-        Key::Down => model.gradient_descent.learn_rate -= 0.01,
+        Key::N => new_run(model),
+        Key::I => model.network.learn(&model.data, model.gradient_descent.learn_rate, model.gradient_descent.h),
+        Key::S => new_network(model),
+        Key::Space => model.learn = !model.learn,
+        Key::Up => model.gradient_descent.learn_rate += GradientDescent::LEARN_RATE_STEP,
+        Key::Down => model.gradient_descent.learn_rate -= GradientDescent::LEARN_RATE_STEP,
+        Key::Right => model.gradient_descent.h /= GradientDescent::H_FACTOR,
+        Key::Left => model.gradient_descent.h *= GradientDescent::H_FACTOR,
+        // Graph.
         Key::R => model.gradient_descent.input_value = x,
+        Key::L => model.gradient_descent.learn(),
         _ => (),
     }
 
-    model.gradient_descent.learn_rate = model.gradient_descent.learn_rate.clamp(0.0, 1.0);
+    model.gradient_descent.learn_rate = model.gradient_descent.learn_rate.clamp(0.0, 100.0);
+    model.gradient_descent.h = model.gradient_descent.h.clamp(0.0, 1.0);
 
-    println!("learn rate: {:.2}", model.gradient_descent.learn_rate);
+    println!("learn rate: {:.5}", model.gradient_descent.learn_rate);
+    println!("h: {:.10}", model.gradient_descent.h);
 }
