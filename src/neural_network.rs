@@ -1,13 +1,13 @@
+use crate::activation::ActivationType;
 use crate::layer::Layer;
 use crate::data_point::DataPoint;
 
 pub struct NeuralNetwork {
     pub layers: Vec<Layer>,
+    pub activation_type: ActivationType,
 }
 
 impl NeuralNetwork {
-
-
     // Create new neural network.
     pub fn new(layer_sizes: Vec<usize>) -> Self {
         // Do not include the input layer in the layers: -1
@@ -18,7 +18,10 @@ impl NeuralNetwork {
             layers.push(Layer::new(layer_sizes[i], layer_sizes[i + 1]));
         }
 
-        NeuralNetwork { layers }
+        NeuralNetwork {
+            layers,
+            activation_type: ActivationType::SIGMOID,
+        }
     }
 
     pub fn learn(&mut self, training_data: &Vec<DataPoint>, learn_rate: f32, h: f32) {
@@ -64,7 +67,7 @@ impl NeuralNetwork {
 
         // Pass the values through every layer.
         for layer in &self.layers {
-            outputs = layer.calculate_outputs(outputs);
+            outputs = layer.calculate_outputs(outputs, &self.activation_type);
         }
 
         outputs
@@ -99,7 +102,6 @@ impl NeuralNetwork {
         for node_out in 0..outputs.len() {
             let current_node_cost = output_layer.node_cost(outputs[node_out], data_point.expected_outputs[node_out]);
             cost += current_node_cost;
-
         }
 
         cost

@@ -1,6 +1,7 @@
 use snippets;
 use nannou::prelude::*;
 
+mod activation;
 mod data_point;
 mod gradient_descent;
 mod layer;
@@ -134,7 +135,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
     draw_boundries(&draw, &win, model, 10, 2.0);
     draw_info(&draw, &win, model);
 
-    if (model.show_graph) {
+    if model.show_graph {
         // Draw graph stuff.
         draw_function_graph(&draw, &win, GradientDescent::function);
         draw_slope(&draw, model, GradientDescent::function);
@@ -174,15 +175,17 @@ correct: {}/{}",
         .color(WHITE);
 }
 
+fn graph_derivative(x: f32) -> f32 {
+    // derivative of: 0.2 * x.powf(4.0) + 0.1 * x.powf(3.0) - x.powf(2.0) + 2.0
+    0.8 * x.powf(3.0) + 0.3 * x.powf(2.0) - 2.0 * x
+}
+
 fn draw_slope(draw: &Draw, model: &Model, graph_function: fn(f32) -> f32) {
     let past_values = &model.gradient_descent.past_values;
     let x = model.gradient_descent.input_value;
     let y = graph_function(x);
 
-    // Aproximate the slope of the function at x.
-    let h = 0.00001;
-    let delta_output = graph_function(x + h) - graph_function(x);
-    let slope = delta_output / h;
+    let slope = graph_derivative(x);
 
     let weight_x = 2.0;
 
@@ -349,17 +352,25 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
     // println!("key pressed: {:?}", key);
 
     match key {
+        // New
         Key::N => new_run(model),
-        Key::I => model.network.learn(&model.data, model.gradient_descent.learn_rate, model.gradient_descent.h),
+        // New network.
         Key::S => new_network(model),
+        // Network learn iteration.
+        Key::I => model.network.learn(&model.data, model.gradient_descent.learn_rate, model.gradient_descent.h),
+        // Toggle learning.
         Key::Space => model.learn = !model.learn,
+        // Learn rate.
         Key::Up => model.gradient_descent.learn_rate += GradientDescent::LEARN_RATE_STEP,
         Key::Down => model.gradient_descent.learn_rate -= GradientDescent::LEARN_RATE_STEP,
+        // H.
         Key::Right => model.gradient_descent.h /= GradientDescent::H_FACTOR,
         Key::Left => model.gradient_descent.h *= GradientDescent::H_FACTOR,
-        // Graph.
+        // Toggle graph.
         Key::G => model.show_graph = !model.show_graph,
+        // New graph.
         Key::R => new_graph(model),
+        // Graph learn iteration.
         Key::L => model.gradient_descent.learn(),
         _ => (),
     }

@@ -22,8 +22,8 @@ impl GradientDescent {
         0.2 * x.powf(4.0) + 0.1 * x.powf(3.0) - x.powf(2.0) + 2.0
     }
 
-    // Run one iteration of the grdient descent algorithm.
-    pub fn learn (&mut self) {
+    // Run one iteration of the gradient descent algorithm.
+    pub fn learn(&mut self) {
         println!("gradient descent learn!");
 
         self.past_values.push(self.input_value);

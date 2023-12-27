@@ -1,6 +1,8 @@
 use snippets;
 
-const WEIGHT_BOUNDRY: f32 = 2.0;
+use crate::activation::{Activations, ActivationType};
+
+const WEIGHT_BOUNDARY: f32 = 2.0;
 
 #[derive(Clone)]
 pub struct Layer {
@@ -43,7 +45,7 @@ impl Layer {
     }
 
     // Calculated the output of the layer.
-    pub fn calculate_outputs(&self, inputs: Vec<f32>) -> Vec<f32> {
+    pub fn calculate_outputs(&self, inputs: Vec<f32>, activation_type: &ActivationType) -> Vec<f32> {
         let mut activations = vec![0.0; self.num_nodes_out];
 
         for node_out in 0..self.num_nodes_out {
@@ -51,7 +53,9 @@ impl Layer {
             for node_in in 0..self.num_nodes_in {
                 weighted_input += inputs[node_in] * self.weights[node_in][node_out];
             }
-            let activation = self.activation_function(weighted_input);
+
+            // Apply activation function.
+            let activation = Activations::get_activation(activation_type).activate(weighted_input);
             activations[node_out] = activation;
         }
 
@@ -64,51 +68,25 @@ impl Layer {
         error * error
     }
 
-    pub fn activation_function(&self, weighted_input: f32) -> f32 {
-        self._sigmoid(weighted_input)
+    fn node_cost_derivative(&self, output_activation: f32, expected_output: f32) -> f32 {
+        2.0 * (output_activation - expected_output)
     }
 
     fn initialize_random_weights(num_nodes_in: usize, num_nodes_out: usize) -> Vec<Vec<f32>> {
         let mut weights: Vec<Vec<f32>> = Vec::with_capacity(num_nodes_in);
 
-        let min = -WEIGHT_BOUNDRY;
-        let max = WEIGHT_BOUNDRY;
+        let min = -WEIGHT_BOUNDARY;
+        let max = WEIGHT_BOUNDARY;
 
         for _ in 0..num_nodes_in {
             let mut current_weights: Vec<f32> = vec![];
             for _ in 0..num_nodes_out {
-                let random_weight = min + snippets::random_numbers().next().unwrap() as f32 / std::u64::MAX as f32 * (max - min);
+                let random_weight = min + snippets::random_numbers().next().unwrap() as f32 / u64::MAX as f32 * (max - min);
                 current_weights.push(random_weight);
             }
             weights.push(current_weights);
         }
 
         weights
-    }
-
-    // Step
-    fn _step(&self, weighted_input: f32) -> f32 {
-        if weighted_input > 0.0 { 1.0 } else { 0.0 }
-    }
-
-    // Sigmoid
-    fn _sigmoid(&self, weighted_input: f32) -> f32 {
-        1.0 / (1.0 + (-weighted_input).exp())
-    }
-
-    // Hyperbolic tangent
-    fn _hyperbolic_tangent(&self, weighted_input: f32) -> f32 {
-        let e2w = (2.0 * weighted_input).exp();
-        (e2w - 1.0) / (e2w + 1.0)
-    }
-
-    // SiLU
-    fn _silu(&self, weighted_input: f32) -> f32 {
-        weighted_input / (1.0 + (-weighted_input).exp())
-    }
-
-    // ReLU
-    fn _relu(&self, weighted_input: f32) -> f32 {
-        weighted_input.max(0.0)
     }
 }
