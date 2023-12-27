@@ -53,6 +53,7 @@ struct Model {
     network: NeuralNetwork,
     gradient_descent: GradientDescent,
     learn: bool,
+    show_graph: bool,
 }
 
 impl GridPoint {
@@ -76,6 +77,7 @@ fn model(app: &App) -> Model {
         network: NeuralNetwork::new(LAYER_CONFIGURATION.to_vec()),
         gradient_descent: GradientDescent::new(0.0),
         learn: false,
+        show_graph: false,
     }
 }
 
@@ -132,9 +134,11 @@ fn view(app: &App, model: &Model, frame: Frame) {
     draw_boundries(&draw, &win, model, 10, 2.0);
     draw_info(&draw, &win, model);
 
-    // Draw graph stuff.
-    draw_function_graph(&draw, &win, GradientDescent::function);
-    draw_slope(&draw, model, GradientDescent::function);
+    if (model.show_graph) {
+        // Draw graph stuff.
+        draw_function_graph(&draw, &win, GradientDescent::function);
+        draw_slope(&draw, model, GradientDescent::function);
+    }
 
     draw.to_frame(app, &frame).unwrap();
 }
@@ -354,6 +358,7 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
         Key::Right => model.gradient_descent.h /= GradientDescent::H_FACTOR,
         Key::Left => model.gradient_descent.h *= GradientDescent::H_FACTOR,
         // Graph.
+        Key::G => model.show_graph = !model.show_graph,
         Key::R => new_graph(model),
         Key::L => model.gradient_descent.learn(),
         _ => (),
