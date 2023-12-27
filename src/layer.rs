@@ -1,6 +1,6 @@
 use snippets;
 
-use crate::activation::{Activations, ActivationType};
+use crate::activation::Activation;
 
 const WEIGHT_BOUNDARY: f32 = 2.0;
 
@@ -12,6 +12,7 @@ pub struct Layer {
     pub cost_gradient_biases: Vec<f32>,
     pub weights: Vec<Vec<f32>>,
     pub biases: Vec<f32>,
+    pub activations: Vec<f32>,
 }
 
 impl Layer {
@@ -23,6 +24,8 @@ impl Layer {
         let weights = Self::initialize_random_weights(num_nodes_in, num_nodes_out);
         let biases = vec![0.0; num_nodes_out];
 
+        let activations = vec![0.0; num_nodes_out];
+
         Layer {
             num_nodes_in,
             num_nodes_out,
@@ -30,6 +33,7 @@ impl Layer {
             cost_gradient_biases,
             weights,
             biases,
+            activations,
         }
     }
 
@@ -45,9 +49,7 @@ impl Layer {
     }
 
     // Calculated the output of the layer.
-    pub fn calculate_outputs(&self, inputs: Vec<f32>, activation_type: &ActivationType) -> Vec<f32> {
-        let mut activations = vec![0.0; self.num_nodes_out];
-
+    pub fn calculate_outputs(&mut self, inputs: Vec<f32>, activation: &Box<dyn Activation>) {
         for node_out in 0..self.num_nodes_out {
             let mut weighted_input = self.biases[node_out];
             for node_in in 0..self.num_nodes_in {
@@ -55,11 +57,10 @@ impl Layer {
             }
 
             // Apply activation function.
-            let activation = Activations::get_activation(activation_type).activate(weighted_input);
-            activations[node_out] = activation;
+            let activation = activation.activate(weighted_input);
+            // Save activation value on layer.
+            self.activations[node_out] = activation;
         }
-
-        return activations;
     }
 
     pub fn node_cost(&self, output_activation: f32, expected_output: f32) -> f32 {

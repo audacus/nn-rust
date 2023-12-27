@@ -1,15 +1,17 @@
-use snippets;
 use nannou::prelude::*;
+
+use snippets;
+
+use crate::activation::ActivationType;
+use crate::data_point::DataPoint;
+use crate::gradient_descent::GradientDescent;
+use crate::neural_network::NeuralNetwork;
 
 mod activation;
 mod data_point;
 mod gradient_descent;
 mod layer;
 mod neural_network;
-
-use crate::data_point::DataPoint;
-use crate::gradient_descent::GradientDescent;
-use crate::neural_network::NeuralNetwork;
 
 // Number of generated entries.
 const ELEMENTS: usize = 65;
@@ -19,10 +21,15 @@ const VALUE_PADDING: f32 = 0.025;
 const CLASS_THRESHOLD: f32 = 0.3;
 // Layer configuration.
 const LAYER_CONFIGURATION: [usize; 3] = [2, 3, 2];
+// Activation function.
+const ACTIVATION_TYPE: ActivationType = ActivationType::SIGMOID;
 
 // Colors
 const COLOR_SAFE: Srgb<u8> = BLUE;
 const COLOR_UNSAFE: Srgb<u8> = RED;
+
+// Pixel granularity for drawing boundaries.
+const BOUNDARY_STEP: usize = 10;
 
 // z indexes
 const Z_BOUNDRY: f32 = 1.0;
@@ -52,7 +59,11 @@ struct Model {
     points: Vec<GridPoint>,
     data: Vec<DataPoint>,
     network: NeuralNetwork,
+    activation_type: ActivationType,
     gradient_descent: GradientDescent,
+    boundary_predictions: Vec<Vec<Option<usize>>>,
+    cost: f32,
+    correct: u32,
     learn: bool,
     show_graph: bool,
 }
@@ -72,11 +83,26 @@ fn model(app: &App) -> Model {
     let data = get_data_points(ELEMENTS);
     let grid_points = data_to_grid_points(&data);
 
+    let window = app.main_window();
+    let win = window.rect();
+
+    let right = win.right() as i32;
+    let top = win.top() as i32;
+
+    let center_to_right = (0..right).step_by(BOUNDARY_STEP);
+    let center_to_top = (0..top).step_by(BOUNDARY_STEP);
+
+    let boundary_predictions = vec![vec![Some(0); center_to_top.len()]; center_to_right.len()];
+
     Model {
         points: grid_points,
         data,
-        network: NeuralNetwork::new(LAYER_CONFIGURATION.to_vec()),
+        network: NeuralNetwork::new(LAYER_CONFIGURATION.to_vec(), &ACTIVATION_TYPE),
+        activation_type: ACTIVATION_TYPE,
         gradient_descent: GradientDescent::new(0.0),
+        boundary_predictions,
+        cost: 0.0,
+        correct: 0,
         learn: false,
         show_graph: false,
     }
@@ -95,7 +121,7 @@ fn new_run(model: &mut Model) {
 fn new_network(model: &mut Model) {
     model.learn = false;
 
-    model.network = NeuralNetwork::new(LAYER_CONFIGURATION.to_vec());
+    model.network = NeuralNetwork::new(LAYER_CONFIGURATION.to_vec(), &model.activation_type);
 }
 
 fn new_graph(model: &mut Model) {
@@ -109,14 +135,39 @@ fn new_graph(model: &mut Model) {
     model.gradient_descent.input_value = x;
 }
 
-fn update(_app: &App, model: &mut Model, _update: Update) {
+fn update(app: &App, model: &mut Model, _update: Update) {
     if model.learn {
-
         // Create different chunk sizes from 1 to all.
         for chunk_size in 1..model.data.len() {
             for chunk in model.data.chunks(chunk_size) {
                 model.network.learn(&chunk.to_vec(), model.gradient_descent.learn_rate, model.gradient_descent.h);
             }
+        }
+    }
+
+    model.cost = model.network.cost(&model.data);
+
+    model.correct = 0;
+    for data_point in &model.data {
+        let predicted_class = model.network.classify(data_point.inputs.to_vec());
+        if Some(data_point.label) == predicted_class {
+            model.correct += 1;
+        }
+    }
+
+    let window = app.main_window();
+    let win = window.rect();
+
+    let right = win.right() as i32;
+    let top = win.top() as i32;
+
+    let center_to_right = (0..right).step_by(BOUNDARY_STEP).len();
+    let center_to_top = (0..top).step_by(BOUNDARY_STEP).len();
+
+    for x in 0..center_to_right {
+        for y in 0..center_to_top {
+            let inputs = vec![(x * BOUNDARY_STEP) as f32 / right as f32, (y * BOUNDARY_STEP) as f32 / top as f32];
+            model.boundary_predictions[x][y] = model.network.classify(inputs);
         }
     }
 }
@@ -132,7 +183,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     // Draw data stuff.
     draw_data_points(&draw, &win, model);
-    draw_boundries(&draw, &win, model, 10, 2.0);
+    draw_boundries(&draw, &win, model, 2.0);
     draw_info(&draw, &win, model);
 
     if model.show_graph {
@@ -145,23 +196,13 @@ fn view(app: &App, model: &Model, frame: Frame) {
 }
 
 fn draw_info(draw: &Draw, win: &Rect, model: &Model) {
-    let cost = model.network.cost(&model.data);
-
-    let mut correct_counter = 0;
-    for data_point in &model.data {
-        let predicted_class = model.network.classify(&data_point.inputs);
-        if Some(data_point.label) == predicted_class {
-            correct_counter += 1;
-        }
-    }
-
     println!();
     let info_text = format!(
         "cost: {:.10}
 learn rate: {:.5}
 h: {:.10}
 correct: {}/{}",
-        cost, model.gradient_descent.learn_rate, model.gradient_descent.h, correct_counter, model.data.len());
+        model.cost, model.gradient_descent.learn_rate, model.gradient_descent.h, model.correct, model.data.len());
 
     println!("{}", info_text);
 
@@ -281,20 +322,19 @@ fn draw_crosshair(draw: &Draw, win: &Rect) {
     }
 }
 
-fn draw_boundries(draw: &Draw, win: &Rect, model: &Model, step: usize, weight: f32) {
-
-    //let left = win.left() as i32;
+fn draw_boundries(draw: &Draw, win: &Rect, model: &Model, weight: f32) {
     let right = win.right() as i32;
-    //let bottom = win.bottom() as i32;
     let top = win.top() as i32;
 
-    for x in (0..right).step_by(step) {
-        for y in (0..top).step_by(step) {
-            let inputs = vec![x as f32 / right as f32, y as f32 / top as f32];
-            let predicted_class = model.network.classify(&inputs);
+    let center_to_right = (0..right).step_by(BOUNDARY_STEP).len();
+    let center_to_top = (0..top).step_by(BOUNDARY_STEP).len();
+
+    for x in 0..center_to_right {
+        for y in 0..center_to_top {
+            let predicted_class = model.boundary_predictions[x][y];
 
             let pixel = draw.ellipse()
-                .xyz(vec3(x as f32, y as f32, Z_BOUNDRY))
+                .xyz(vec3((x * BOUNDARY_STEP) as f32, (y * BOUNDARY_STEP) as f32, Z_BOUNDRY))
                 .wh(vec2(weight, weight));
 
             if predicted_class == Some(0) {

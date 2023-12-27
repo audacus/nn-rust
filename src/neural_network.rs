@@ -1,15 +1,15 @@
-use crate::activation::ActivationType;
+use crate::activation::{Activation, Activations, ActivationType};
 use crate::layer::Layer;
 use crate::data_point::DataPoint;
 
 pub struct NeuralNetwork {
     pub layers: Vec<Layer>,
-    pub activation_type: ActivationType,
+    pub activation: Box<dyn Activation>,
 }
 
 impl NeuralNetwork {
     // Create new neural network.
-    pub fn new(layer_sizes: Vec<usize>) -> Self {
+    pub fn new(layer_sizes: Vec<usize>, activation_type: &ActivationType) -> Self {
         // Do not include the input layer in the layers: -1
         let layer_count = layer_sizes.len() - 1;
         let mut layers: Vec<Layer> = Vec::with_capacity(layer_count);
@@ -18,16 +18,18 @@ impl NeuralNetwork {
             layers.push(Layer::new(layer_sizes[i], layer_sizes[i + 1]));
         }
 
+        let activation = Activations::get_activation(activation_type);
+
         NeuralNetwork {
             layers,
-            activation_type: ActivationType::SIGMOID,
+            activation,
         }
     }
 
     pub fn learn(&mut self, training_data: &Vec<DataPoint>, learn_rate: f32, h: f32) {
         let original_cost = self.cost(training_data);
 
-        // Clone layers to use for iterating with a unmutable reference.
+        // Clone layers to use for iterating with a immutable reference.
         let layers = self.layers.clone();
 
         for layer_index in 0..layers.len() {
@@ -62,19 +64,20 @@ impl NeuralNetwork {
     }
 
     // Run the input values through the network to calculate the output values.
-    pub fn calculate_outputs(&self, inputs: &Vec<f32>) -> Vec<f32> {
-        let mut outputs = inputs.clone();
+    pub fn calculate_outputs(&mut self, inputs: Vec<f32>) -> Vec<f32> {
+        let mut outputs = inputs;
 
-        // Pass the values through every layer.
-        for layer in &self.layers {
-            outputs = layer.calculate_outputs(outputs, &self.activation_type);
+        for layer_index in 0..self.layers.len() {
+            self.layers[layer_index].calculate_outputs(outputs, &self.activation);
+
+            outputs = self.layers[layer_index].activations.clone();
         }
 
         outputs
     }
 
-    // Run the inputs through the newtwork and calculate which output node has the highest value.
-    pub fn classify(&self, inputs: &Vec<f32>) -> Option<usize> {
+    // Run the inputs through the network and calculate which output node has the highest value.
+    pub fn classify(&mut self, inputs: Vec<f32>) -> Option<usize> {
         let outputs = self.calculate_outputs(inputs);
 
         outputs.iter()
@@ -83,7 +86,7 @@ impl NeuralNetwork {
             .map(|(index, _)| index)
     }
 
-    pub fn cost(&self, data: &Vec<DataPoint>) -> f32 {
+    pub fn cost(&mut self, data: &Vec<DataPoint>) -> f32 {
         let mut total_cost: f32 = 0.0;
         let data_len = data.len() as f32;
 
@@ -94,8 +97,8 @@ impl NeuralNetwork {
         total_cost / data_len
     }
 
-    fn cost_single(&self, data_point: &DataPoint) -> f32 {
-        let outputs = self.calculate_outputs(&data_point.inputs);
+    fn cost_single(&mut self, data_point: &DataPoint) -> f32 {
+        let outputs = self.calculate_outputs(data_point.inputs.to_vec());
         let output_layer = &self.layers.last().unwrap();
         let mut cost: f32 = 0.0;
 
