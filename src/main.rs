@@ -30,6 +30,8 @@ const COLOR_UNSAFE: Srgb<u8> = RED;
 
 // Pixel granularity for drawing boundaries.
 const BOUNDARY_STEP: usize = 10;
+// Stepping for max chunk size factor.
+const MAX_CHUNK_SIZE_FACTOR_STEP: f32 = 0.1;
 
 // z indexes
 const Z_BOUNDRY: f32 = 1.0;
@@ -62,6 +64,7 @@ struct Model {
     activation_type: ActivationType,
     gradient_descent: GradientDescent,
     boundary_predictions: Vec<Vec<Option<usize>>>,
+    max_chunk_size_factor: f32,
     cost: f32,
     correct: u32,
     learn: bool,
@@ -101,6 +104,7 @@ fn model(app: &App) -> Model {
         activation_type: ACTIVATION_TYPE,
         gradient_descent: GradientDescent::new(0.0),
         boundary_predictions,
+        max_chunk_size_factor: 0.5,
         cost: 0.0,
         correct: 0,
         learn: false,
@@ -137,8 +141,8 @@ fn new_graph(model: &mut Model) {
 
 fn update(app: &App, model: &mut Model, _update: Update) {
     if model.learn {
-        // Create different chunk sizes from 1 to all.
-        for chunk_size in 1..model.data.len() {
+        // Create different chunk sizes from 1 to half.
+        for chunk_size in 1..((model.data.len() as f32 * model.max_chunk_size_factor) as usize) {
             for chunk in model.data.chunks(chunk_size) {
                 model.network.learn(&chunk.to_vec(), model.gradient_descent.learn_rate, model.gradient_descent.h);
             }
@@ -200,9 +204,10 @@ fn draw_info(draw: &Draw, win: &Rect, model: &Model) {
     let info_text = format!(
         "cost: {:.10}
 learn rate: {:.5}
+max chunk size factor: {:.1}
 h: {:.10}
 correct: {}/{}",
-        model.cost, model.gradient_descent.learn_rate, model.gradient_descent.h, model.correct, model.data.len());
+        model.cost, model.gradient_descent.learn_rate, model.max_chunk_size_factor, model.gradient_descent.h, model.correct, model.data.len());
 
     println!("{}", info_text);
 
@@ -403,6 +408,9 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
         // Learn rate.
         Key::Up => model.gradient_descent.learn_rate += GradientDescent::LEARN_RATE_STEP,
         Key::Down => model.gradient_descent.learn_rate -= GradientDescent::LEARN_RATE_STEP,
+        // Max chunk size factor.
+        Key::K => model.max_chunk_size_factor += MAX_CHUNK_SIZE_FACTOR_STEP,
+        Key::J => model.max_chunk_size_factor -= MAX_CHUNK_SIZE_FACTOR_STEP,
         // H.
         Key::Right => model.gradient_descent.h /= GradientDescent::H_FACTOR,
         Key::Left => model.gradient_descent.h *= GradientDescent::H_FACTOR,
@@ -416,6 +424,7 @@ fn key_pressed(_app: &App, model: &mut Model, key: Key) {
     }
 
     model.gradient_descent.learn_rate = model.gradient_descent.learn_rate.clamp(0.0, 100.0);
+    model.max_chunk_size_factor = model.max_chunk_size_factor.clamp(0.0, 1.0);
     model.gradient_descent.h = model.gradient_descent.h.clamp(0.0, 1.0);
 
     println!("learn rate: {:.5}", model.gradient_descent.learn_rate);
