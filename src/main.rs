@@ -30,7 +30,7 @@ const Z_GRAPH: f32 = 3.0;
 const Z_UI: f32 = 4.0;
 
 // 100 pixel correspond to value 1.0
- const GRAPH_SCALING: f32 = 100.0;
+const GRAPH_SCALING: f32 = 100.0;
 
 fn main() {
     nannou::app(model)
@@ -46,6 +46,7 @@ struct GridPoint {
     z: f32,
     color: Srgb<u8>,
 }
+
 struct Model {
     points: Vec<GridPoint>,
     data: Vec<DataPoint>,
@@ -151,11 +152,11 @@ fn draw_info(draw: &Draw, win: &Rect, model: &Model) {
 
     println!();
     let info_text = format!(
-"cost: {:.10}
+        "cost: {:.10}
 learn rate: {:.5}
 h: {:.10}
 correct: {}/{}",
-    cost, model.gradient_descent.learn_rate, model.gradient_descent.h, correct_counter, model.data.len());
+        cost, model.gradient_descent.learn_rate, model.gradient_descent.h, correct_counter, model.data.len());
 
     println!("{}", info_text);
 
@@ -169,7 +170,7 @@ correct: {}/{}",
         .color(WHITE);
 }
 
-fn  draw_slope(draw: &Draw, model: &Model, graph_function: fn(f32) -> f32) {
+fn draw_slope(draw: &Draw, model: &Model, graph_function: fn(f32) -> f32) {
     let past_values = &model.gradient_descent.past_values;
     let x = model.gradient_descent.input_value;
     let y = graph_function(x);
@@ -282,7 +283,6 @@ fn draw_boundries(draw: &Draw, win: &Rect, model: &Model, step: usize, weight: f
 
     for x in (0..right).step_by(step) {
         for y in (0..top).step_by(step) {
-
             let inputs = vec![x as f32 / right as f32, y as f32 / top as f32];
             let predicted_class = model.network.classify(&inputs);
 

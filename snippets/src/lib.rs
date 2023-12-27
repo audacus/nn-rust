@@ -5,7 +5,7 @@ pub fn random_seed() -> u64 {
     RandomState::new().build_hasher().finish()
 }
 
-pub fn random_numbers() -> impl Iterator<Item = u64> {
+pub fn random_numbers() -> impl Iterator<Item=u64> {
     let mut random = random_seed();
     std::iter::repeat_with(move || {
         random ^= random << 13;
